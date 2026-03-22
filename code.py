@@ -4,7 +4,9 @@ import board
 import terminalio
 from adafruit_matrixportal.matrixportal import MatrixPortal
 from adafruit_portalbase.network import HttpError
-import adafruit_requests as requests
+import adafruit_connection_manager
+import adafruit_requests
+from adafruit_requests import OutOfRetries
 import json
 
 import adafruit_display_text.label
@@ -29,16 +31,14 @@ w.mode = WatchDogMode.RESET
 
 FONT=terminalio.FONT
 
-try:
-    from secrets import secrets
-except ImportError:
-    print("Secrets including geo are kept in secrets.py, please add them there!")
-    raise
+import os
 
 # How often to query fr24 - quick enough to catch a plane flying over, not so often as to cause any issues, hopefully
 QUERY_DELAY=30
-#Area to search for flights, see secrets file
-BOUNDS_BOX=secrets["bounds_box"]
+#Area to search for flights, see settings.toml
+BOUNDS_BOX=os.getenv("BOUNDS_BOX")
+if not BOUNDS_BOX:
+    raise ValueError("BOUNDS_BOX not found in settings.toml")
 
 # Colours and timings
 ROW_ONE_COLOUR=0xEE82EE
@@ -77,7 +77,14 @@ esp = adafruit_esp32spi.ESP_SPIcontrol(spi, esp32_cs, esp32_ready, esp32_reset)
 status_light = neopixel.NeoPixel(
     board.NEOPIXEL, 1, brightness=0.2
 )
-wifi = adafruit_esp32spi_wifimanager.ESPSPI_WiFiManager(esp, secrets, status_light,debug=False,attempts=1)
+_wifi_secrets = {
+    "ssid": os.getenv("CIRCUITPY_WIFI_SSID"),
+    "password": os.getenv("CIRCUITPY_WIFI_PASSWORD"),
+}
+wifi = adafruit_esp32spi_wifimanager.ESPSPI_WiFiManager(esp, _wifi_secrets, status_light, debug=False, attempts=1)
+pool = adafruit_connection_manager.get_radio_socketpool(esp)
+ssl_context = adafruit_connection_manager.get_radio_ssl_context(esp)
+requests = adafruit_requests.Session(pool, ssl_context)
 
 # Top level matrixportal object
 matrixportal = MatrixPortal(
@@ -141,11 +148,11 @@ g = displayio.Group()
 g.append(label1)
 g.append(label2)
 g.append(label3)
-matrixportal.display.show(g)
+matrixportal.display.root_group = g
 
 # Scroll the plane bitmap right to left (same direction as scrolling text)
 def plane_animation():
-    matrixportal.display.show(planeG)
+    matrixportal.display.root_group = planeG
     for i in range(matrixportal.display.width+24,-12,-1):
             planeG.x=i
             w.feed()
@@ -166,7 +173,7 @@ def scroll(line):
 # Populate the labels, then scroll longer versions of the text
 def display_flight():
 
-    matrixportal.display.show(g)
+    matrixportal.display.root_group = g
     label1.text=label1_short
     label2.text=label2_short
     label3.text=label3_short
@@ -217,7 +224,7 @@ def get_flight_details(fn):
     try:
         response=requests.get(url=FLIGHT_LONG_DETAILS_HEAD+fn,headers=rheaders)
         for chunk in response.iter_content(chunk_size=chunk_length):
-
+            w.feed()
             # if the chunk will fit in the byte array, add it
             if(byte_counter+chunk_length<=json_size):
                 for i in range(0,len(chunk)):
@@ -385,8 +392,10 @@ def get_flights():
     matrixportal.url=FLIGHT_SEARCH_URL
     try:
         #response = json.loads(matrixportal.fetch())
+        w.feed()
         response=requests.get(url=FLIGHT_SEARCH_URL,headers=rheaders).json()
-    except (RuntimeError,OSError, HttpError, ValueError, requests.OutOfRetries) as e:
+        w.feed()
+    except (RuntimeError,OSError, HttpError, ValueError, OutOfRetries) as e:
         print(e.__class__.__name__+"--------------------------------------")
         print(e)
         checkConnection()

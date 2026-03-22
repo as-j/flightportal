@@ -1,0 +1,9 @@
+# WiFi credentials and configuration
+# Copy this file to your CircuitPython device as settings.toml
+
+CIRCUITPY_WIFI_SSID="wifi network"
+CIRCUITPY_WIFI_PASSWORD="wifi password"
+
+# Area to search for flights: top latitude, bottom latitude, left longitude, right longitude
+# (this example is central London)
+BOUNDS_BOX="51.6,51.4,-0.3,-0.1"
