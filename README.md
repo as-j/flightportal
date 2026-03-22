@@ -1,6 +1,16 @@
 # flightportal
 Project for displaying the details of planes overhead on an Adafruit MatrixPortal and LED matrix
 
+## CircuitPython 10.x update
+
+Updated to run on CircuitPython 10.x (tested on 10.1.4):
+
+- **Configuration**: `secrets.py` replaced by `settings.toml`. Copy `settings.toml` to the root of `CIRCUITPY` and fill in your WiFi credentials and bounding box.
+- **Display API**: `display.show()` replaced with `display.root_group` as required by CP10.
+- **Networking**: switched from the deprecated `ESPSPI_WiFiManager` + module-level `adafruit_requests` to `adafruit_connection_manager` with an `adafruit_requests.Session`.
+- **Watchdog reliability**: feeds added throughout initialisation and all blocking operations (HTTP requests, WiFi connection) to prevent resets on cold boot or slow networks. WiFi reconnection now uses `esp.connect_AP()` with an explicit 10s timeout to stay safely under the 16s hardware watchdog window.
+- **Local/GA flight support**: FR24 returns `None` for airline and airport fields on untracked VFR flights. A `safe_get()` helper now handles missing data gracefully. The N-number (callsign) is shown on the display when no flight number is available. A `gc.collect()` before each detail fetch prevents `MemoryError` on longer sessions.
+
 (video sped up to make the file fit, the speeds and delays are configurable anyway)
 
 https://user-images.githubusercontent.com/103124527/206902629-1f31bd41-d8a8-415e-a35a-625efb20b3d6.MOV
