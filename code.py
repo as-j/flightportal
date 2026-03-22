@@ -228,6 +228,7 @@ def get_flight_details(fn):
             w.feed()
 
     # Get the URL response one chunk at a time
+    gc.collect()
     try:
         w.feed()
         response=requests.get(url=FLIGHT_LONG_DETAILS_HEAD+fn,headers=rheaders)
@@ -274,6 +275,15 @@ def get_flight_details(fn):
     return False
     
 
+# Safely walk a nested dict/list, returning default if any level is None or missing
+def safe_get(d, *keys, default=''):
+    for key in keys:
+        if d is None or not isinstance(d, dict):
+            return default
+        d = d.get(key)
+    return d if d is not None else default
+
+
 # Look at the byte array that fetch_details saved into and extract any fields we want
 def parse_details_json():
 
@@ -285,24 +295,24 @@ def parse_details_json():
 
         # Some available values from the JSON. Put the details URL and a flight ID in your browser and have a look for more.
 
-        flight_number=long_json["identification"]["number"]["default"]
+        flight_number=safe_get(long_json,"identification","number","default")
         #print(flight_number)
-        flight_callsign=long_json["identification"]["callsign"]
-        aircraft_code=long_json["aircraft"]["model"]["code"]
-        aircraft_model=long_json["aircraft"]["model"]["text"]
-        #aircraft_registration=long_json["aircraft"]["registration"]
-        airline_name=long_json["airline"]["name"]
-        #airline_short=long_json["airline"]["short"]
-        airport_origin_name=long_json["airport"]["origin"]["name"]
+        flight_callsign=safe_get(long_json,"identification","callsign")
+        aircraft_code=safe_get(long_json,"aircraft","model","code")
+        aircraft_model=safe_get(long_json,"aircraft","model","text")
+        #aircraft_registration=safe_get(long_json,"aircraft","registration")
+        airline_name=safe_get(long_json,"airline","name")
+        #airline_short=safe_get(long_json,"airline","short")
+        airport_origin_name=safe_get(long_json,"airport","origin","name")
         airport_origin_name=airport_origin_name.replace(" Airport","")
-        airport_origin_code=long_json["airport"]["origin"]["code"]["iata"]
-        #airport_origin_country=long_json["airport"]["origin"]["position"]["country"]["name"]
-        #airport_origin_country_code=long_json["airport"]["origin"]["position"]["country"]["code"]
-        #airport_origin_city=long_json["airport"]["origin"]["position"]["region"]["city"]
-        #airport_origin_terminal=long_json["airport"]["origin"]["info"]["terminal"]
-        airport_destination_name=long_json["airport"]["destination"]["name"]
+        airport_origin_code=safe_get(long_json,"airport","origin","code","iata")
+        #airport_origin_country=safe_get(long_json,"airport","origin","position","country","name")
+        #airport_origin_country_code=safe_get(long_json,"airport","origin","position","country","code")
+        #airport_origin_city=safe_get(long_json,"airport","origin","position","region","city")
+        #airport_origin_terminal=safe_get(long_json,"airport","origin","info","terminal")
+        airport_destination_name=safe_get(long_json,"airport","destination","name")
         airport_destination_name=airport_destination_name.replace(" Airport","")
-        airport_destination_code=long_json["airport"]["destination"]["code"]["iata"]
+        airport_destination_code=safe_get(long_json,"airport","destination","code","iata")
         #airport_destination_country=long_json["airport"]["destination"]["position"]["country"]["name"]
         #airport_destination_country_code=long_json["airport"]["destination"]["position"]["country"]["code"]
         #airport_destination_city=long_json["airport"]["destination"]["position"]["region"]["city"]
@@ -336,7 +346,7 @@ def parse_details_json():
         global label3_short
         global label3_long
 
-        label1_short=flight_number
+        label1_short=flight_number if flight_number else flight_callsign
         label1_long=airline_name
         label2_short=airport_origin_code+"-"+airport_destination_code
         label2_long=airport_origin_name+"-"+airport_destination_name
