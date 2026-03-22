@@ -74,6 +74,7 @@ esp32_ready = DigitalInOut(board.ESP_BUSY)
 esp32_reset = DigitalInOut(board.ESP_RESET)
 spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
 esp = adafruit_esp32spi.ESP_SPIcontrol(spi, esp32_cs, esp32_ready, esp32_reset)
+w.feed()
 status_light = neopixel.NeoPixel(
     board.NEOPIXEL, 1, brightness=0.2
 )
@@ -82,9 +83,12 @@ _wifi_secrets = {
     "password": os.getenv("CIRCUITPY_WIFI_PASSWORD"),
 }
 wifi = adafruit_esp32spi_wifimanager.ESPSPI_WiFiManager(esp, _wifi_secrets, status_light, debug=False, attempts=1)
+w.feed()
 pool = adafruit_connection_manager.get_radio_socketpool(esp)
+w.feed()
 ssl_context = adafruit_connection_manager.get_radio_ssl_context(esp)
 requests = adafruit_requests.Session(pool, ssl_context)
+w.feed()
 
 # Top level matrixportal object
 matrixportal = MatrixPortal(
@@ -93,6 +97,7 @@ matrixportal = MatrixPortal(
     rotation=0,
     debug=False
 )
+w.feed()
 
 # Some memory shenanigans - the matrixportal doesn't do great at assigning big strings dynamically. So we create a big static array to put the JSON results in each time.
 json_size=14336
@@ -219,9 +224,12 @@ def get_flight_details(fn):
     # zero out any old data in the byte array
     for i in range(0,json_size):
         json_bytes[i]=0
+        if i == json_size // 2:
+            w.feed()
 
     # Get the URL response one chunk at a time
     try:
+        w.feed()
         response=requests.get(url=FLIGHT_LONG_DETAILS_HEAD+fn,headers=rheaders)
         for chunk in response.iter_content(chunk_size=chunk_length):
             w.feed()
@@ -371,17 +379,21 @@ def checkConnection():
     while (not esp.status == adafruit_esp32spi.WL_CONNECTED) and attempt<attempts:
         print("Connect attempt "+str(attempt)+" of "+str(attempts))
         print("Reset ESP...")
+        status_light[0] = (255, 0, 0)  # red = connecting
         w.feed()
         wifi.reset()
         print("Attempt WiFi connect...")
         w.feed()
         try:
-            wifi.connect()
-        except OSError as e:
-            print(e.__class__.__name__+"--------------------------------------")
+            # Use connect_AP directly with a timeout safely under the 16s watchdog window
+            esp.connect_AP(_wifi_secrets["ssid"], _wifi_secrets["password"], 10)
+        except (OSError, RuntimeError) as e:
+            print("Failed to connect, retrying")
             print(e)
+        w.feed()
         attempt+=1
     if esp.status == adafruit_esp32spi.WL_CONNECTED:
+        status_light[0] = (0, 255, 0)  # green = connected
         print("Successfully connected.")
     else:
         print("Failed to connect.")
